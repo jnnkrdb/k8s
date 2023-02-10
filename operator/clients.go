@@ -1,9 +1,6 @@
 package operator
 
 import (
-	"errors"
-
-	"github.com/jnnkrdb/corerdb/prtcl"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -37,49 +34,27 @@ func CRD() *rest.RESTClient {
 // initialize the kubernetes client
 func InitK8sOperatorClient() (err error) {
 
-	prtcl.Log.Println("initializing kubernetes api-connection")
+	if _config, err = rest.InClusterConfig(); err == nil {
 
-	if _config, err = rest.InClusterConfig(); err != nil {
-
-		prtcl.Log.Println("error while initialization:", err)
-
-		prtcl.PrintObject(_config, err)
-
-	} else {
-
-		if _k8sclient, err = kubernetes.NewForConfig(_config); err != nil {
-
-			prtcl.Log.Println("clientset error:", err)
-
-			prtcl.PrintObject(_config, _k8sclient, err)
-
-		} else {
-
-			prtcl.Log.Println("created kubernetes.Clientset and rest.Config")
-		}
+		_k8sclient, err = kubernetes.NewForConfig(_config)
 	}
 
 	return
 }
 
 // initialize the custom resource definition rest client, based on the generated kubernetes client
+//
+// if no kuberntes client was generated before, it will be generated first
 func InitCRDOperatorRestClient(groupname, groupversion string, schemeAddFunc func(s *runtime.Scheme) error) (err error) {
-
-	prtcl.Log.Println("initializing crds rest api-connection")
 
 	if _config == nil {
 
-		err = errors.New("can not initialize crd restclient before kubernetes clientset")
+		err = InitK8sOperatorClient()
+	}
 
-		prtcl.Log.Println("error initializing crd-rest-client:", err)
+	if err == nil {
 
-	} else {
-
-		if err = schemeAddFunc(scheme.Scheme); err != nil {
-
-			prtcl.Log.Println("error adding scheme:", err)
-
-		} else {
+		if err = schemeAddFunc(scheme.Scheme); err == nil {
 
 			// create the rest client for the crds
 			crdConf := *_config
@@ -95,12 +70,7 @@ func InitCRDOperatorRestClient(groupname, groupversion string, schemeAddFunc fun
 
 			crdConf.UserAgent = rest.DefaultKubernetesUserAgent()
 
-			if _crdclient, err = rest.UnversionedRESTClientFor(&crdConf); err != nil {
-
-				prtcl.Log.Println("failed loading restclient:", err)
-
-				prtcl.PrintObject(crdConf, _crdclient, err)
-			}
+			_crdclient, err = rest.UnversionedRESTClientFor(&crdConf)
 		}
 	}
 
